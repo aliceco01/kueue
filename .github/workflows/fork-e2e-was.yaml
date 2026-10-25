@@ -1,0 +1,31 @@
+# Fork-only: runs the WAS API e2e lane on a GitHub runner. Not for upstream.
+name: fork-e2e-was
+on:
+  push:
+    branches: [ci-e2e-was-lws-gang]
+  workflow_dispatch: {}
+jobs:
+  e2e-was:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af
+          df -h /
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build Kueue image
+        # public.ecr.aws rate-limits anonymous runner pulls; Docker Hub serves the same image.
+        run: make kind-image-build BUILDER_IMAGE=docker.io/library/golang:1.27
+      - name: Run WAS API e2e
+        run: make test-e2e-was ARTIFACTS=${{ github.workspace }}/artifacts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-artifacts
+          path: artifacts/
+          retention-days: 7
