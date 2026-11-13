@@ -1,0 +1,30 @@
+# Fork-only: runs the WAS e2e lanes on a GitHub runner. Not for upstream.
+name: fork-e2e-was
+on:
+  workflow_dispatch: {}
+jobs:
+  e2e-was:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {target: test-e2e-was, ginkgo-args: ''}
+          - {target: test-e2e-was, ginkgo-args: '--label-filter=feature:was-leaderworkerset'}
+          - {target: test-e2e-k8s-main-was, ginkgo-args: ''}
+    timeout-minutes: 150
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af
+          df -h /
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build Kueue image
+        # public.ecr.aws rate-limits anonymous runner pulls; Docker Hub serves the same image.
+        run: make kind-image-build BUILDER_IMAGE=docker.io/library/golang:1.27
+      - name: Run WAS e2e
+        run: make ${{ matrix.target }} ARTIFACTS=${{ github.workspace }}/artifacts GINKGO_ARGS='${{ matrix.ginkgo-args }}'
